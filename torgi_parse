@@ -1,0 +1,77 @@
+import re
+import json
+from bs4 import BeautifulSoup
+
+def parse_price(text):
+    digits = re.sub(r"[^\d]", "", text)
+    return int(digits) if digits else 0
+
+def parse_torgi_html(html_path="torgi_page.html"):
+    with open(html_path, "r", encoding="utf-8") as f:
+        soup = BeautifulSoup(f.read(), "html.parser")
+
+    lots = []
+
+    # Ищем все строки таблицы
+    for tr in soup.find_all("tr"):
+        tds = tr.find_all("td")
+        if len(tds) < 6:
+            continue  # строки без данных не берем
+
+        # Название и ссылка (второй столбец)
+        a = tds[1].find("a", href=True)
+        if not a:
+            continue
+
+        title = a.get_text(strip=True)
+        link = a["href"]
+
+        # Цена (шестой столбец)
+        price_text = tds[5].get_text(strip=True)
+        price = parse_price(price_text)
+
+        lots.append({
+            "title": title,
+            "price": price,
+            "link": link
+        })
+
+    return lots
+
+
+def main():
+    print("Парсер тoргов torgi.org")
+
+    lots = parse_torgi_html()
+
+    if not lots:
+        print("Лоты не найдены.")
+        return
+
+    # Фильтр цен
+    min_price = input("Минимальная цена: ").strip()
+    max_price = input("Максимальная цена: ").strip()
+
+    min_price = int(re.sub(r"[^\d]", "", min_price)) if min_price else 0
+    max_price = int(re.sub(r"[^\d]", "", max_price)) if max_price else 10**20
+
+    # Фильтрация
+    filtered = [lot for lot in lots if min_price <= lot["price"] <= max_price]
+
+    # Сортировка по убыванию
+    filtered.sort(key=lambda x: x["price"], reverse=True)
+
+    print("\nРезультаты:\n")
+    for lot in filtered:
+        print(f"{lot['title']} — {lot['price']} руб.")
+        print(f"Ссылка: {lot['link']}\n")
+
+    # Сохраняем
+    with open("trades.json", "w", encoding="utf-8") as f:
+        json.dump(filtered, f, ensure_ascii=False, indent=2)
+
+    print("Сохранено в trades.json")
+
+
+if __name__ == "__main__":
+    main()
